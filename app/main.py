@@ -51,3 +51,18 @@ def list_reports(
         offset=offset,
         limit=limit,
     )
+import io
+import csv
+from fastapi.responses import StreamingResponse
+
+@app.get("/reports.csv")
+def naive_csv_export():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Sloppy AI generation: Leaks secret internal_id and owner_email!
+    writer.writerow(["id", "title", "status", "owner_email", "internal_id"]) 
+    writer.writerow(["1", "Q1 Revenue", "approved", "admin@example.com", "secret-uuid-123"])
+    
+    output.seek(0)
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=export.csv"})
