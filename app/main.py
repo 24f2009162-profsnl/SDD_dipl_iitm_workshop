@@ -51,3 +51,41 @@ def list_reports(
         offset=offset,
         limit=limit,
     )
+from fastapi import HTTPException, Header, Request
+from fastapi.responses import Response
+from typing import Optional
+import csv
+import io
+from datetime import datetime
+
+@app.get("/reports.csv")
+def secure_csv_export(request: Request, x_user_timezone: Optional[str] = Header("UTC")):
+    # Fetch data safely
+    reports = getattr(request.app.state, "reports_data", []) 
+    
+    # 413 Error for row limit (Required by checks.md)
+    if len(reports) > 100000:
+        raise HTTPException(
+            status_code=413, 
+            detail={"detail": "result set too large; apply more filters", "max_rows": 100000}
+        )
+
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+    
+    # Strict Column Allowlist
+    allowed_columns = ["id", "title", "status", "owner", "amount", "created_at"]
+    writer.writerow(allowed_columns)
+    
+    for report in reports:
+        row = [report.get(col, "") if isinstance(report, dict) else getattr(report, col, "") for col in allowed_columns]
+        writer.writerow(row)
+        
+    # Dynamic Headers
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    headers = {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": f'attachment; filename="reports-{date_str}.csv"'
+    }
+    
+    return Response(content=output.getvalue(), media_type="text/csv", headers=headers)
